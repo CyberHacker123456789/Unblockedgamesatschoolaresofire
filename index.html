@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Asteroid Hunter: Pro Edition</title>
+    <title>Asteroid Hunter: Shield Edition</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #0d0d0d; font-family: 'Courier New', Courier, monospace; color: white; }
         canvas { display: block; }
@@ -11,17 +11,11 @@
         h2 { color: #00ffcc; margin-top: 0; }
         .control-group { margin: 15px 0; padding: 10px; border-bottom: 1px solid #333; text-align: left; }
         .control-label { display: block; margin-bottom: 10px; font-weight: bold; color: #aaa; }
-        
-        /* Color Options */
         .color-option { width: 30px; height: 30px; border-radius: 50%; display: inline-block; margin-right: 10px; cursor: pointer; border: 3px solid transparent; }
         .color-option.selected { border: 3px solid white; }
-        
-        /* Toggles */
         .switch { cursor: pointer; background: #333; padding: 5px 15px; border-radius: 5px; border: 1px solid #555; color: white; margin-right: 10px; }
         .switch.on { background: #008855; border-color: lime; }
-
         .game-button { background: #00ffcc; color: black; border: none; padding: 15px 30px; font-size: 20px; cursor: pointer; margin-top: 20px; font-family: inherit; font-weight: bold; width: 100%; }
-        .game-button:hover { background: white; }
     </style>
 </head>
 <body>
@@ -32,7 +26,6 @@
 
     <div id="settingsScreen" class="screen-container">
         <h2>MISSION CONTROL</h2>
-        
         <div class="control-group">
             <span class="control-label">SHIP COLOR</span>
             <div id="colorPicker">
@@ -42,13 +35,11 @@
                 <span class="color-option" data-color="#ff00ff" style="background-color: #ff00ff;"></span>
             </div>
         </div>
-
         <div class="control-group">
             <span class="control-label">SYSTEMS</span>
             <button id="soundToggle" class="switch on" onclick="toggleSound()">SOUND: ON</button>
             <button id="autoToggle" class="switch" onclick="toggleAuto()">AUTOSHOOT: OFF</button>
         </div>
-
         <button class="game-button" onclick="startGame()">LAUNCH (Space)</button>
     </div>
 
@@ -57,7 +48,6 @@
         <p>Score: <span id="finalScore">0</span></p>
         <button class="game-button" onclick="showSettings()">RETURN TO BASE</button>
     </div>
-
     <canvas id="gameCanvas"></canvas>
 
 <script>
@@ -67,42 +57,30 @@
     canvas.height = window.innerHeight;
 
     let score = 0, highScore = localStorage.getItem('astroHighScore') || 0;
-    let lives = 3, gameRunning = false, asteroids = [], bullets = [], particles = [], keys = {};
-    let shipColor = 'white', autoShoot = false, soundEnabled = true, lastShot = 0;
+    let lives = 3, gameRunning = false, asteroids = [], bullets = [], particles = [], powerups = [], keys = {};
+    let shipColor = 'white', autoShoot = false, soundEnabled = true, lastShot = 0, hasShield = false;
 
     const ship = { x: canvas.width/2, y: canvas.height/2, r: 12, a: -Math.PI/2, xv: 0, yv: 0, thrust: 0.15, delay: 12 };
     document.getElementById('highScore').innerText = highScore;
 
-    // --- AUDIO ---
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     let audioCtx; 
 
-    function playSound(freq, duration) {
+    function playSound(freq, duration, type='sine') {
         if (!soundEnabled) return;
         if (!audioCtx) audioCtx = new AudioContext();
         if (audioCtx.state === 'suspended') audioCtx.resume();
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
+        osc.type = type;
         osc.frequency.value = freq;
         osc.connect(g); g.connect(audioCtx.destination);
         g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
         osc.start(); osc.stop(audioCtx.currentTime + duration);
     }
 
-    // --- CONTROLS ---
-    function toggleSound() {
-        soundEnabled = !soundEnabled;
-        const btn = document.getElementById('soundToggle');
-        btn.innerText = `SOUND: ${soundEnabled ? 'ON' : 'OFF'}`;
-        btn.classList.toggle('on');
-    }
-
-    function toggleAuto() {
-        autoShoot = !autoShoot;
-        const btn = document.getElementById('autoToggle');
-        btn.innerText = `AUTOSHOOT: ${autoShoot ? 'ON' : 'OFF'}`;
-        btn.classList.toggle('on');
-    }
+    function toggleSound() { soundEnabled = !soundEnabled; const btn = document.getElementById('soundToggle'); btn.innerText = `SOUND: ${soundEnabled ? 'ON' : 'OFF'}`; btn.classList.toggle('on'); }
+    function toggleAuto() { autoShoot = !autoShoot; const btn = document.getElementById('autoToggle'); btn.innerText = `AUTOSHOOT: ${autoShoot ? 'ON' : 'OFF'}`; btn.classList.toggle('on'); }
 
     document.querySelectorAll('.color-option').forEach(opt => {
         opt.onclick = () => {
@@ -118,28 +96,24 @@
     function startGame() {
         document.getElementById('settingsScreen').style.display = 'none';
         document.getElementById('gameOver').style.display = 'none';
-        score = 0; lives = 3; asteroids = []; bullets = [];
+        score = 0; lives = 3; asteroids = []; bullets = []; powerups = []; hasShield = false;
         ship.x = canvas.width/2; ship.y = canvas.height/2; ship.xv = 0; ship.yv = 0;
         for(let i=0; i<6; i++) spawnAsteroid();
         gameRunning = true;
         update();
     }
 
-    function spawnAsteroid() {
-        asteroids.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, r: 30, xv: (Math.random()-0.5)*3, yv: (Math.random()-0.5)*3 });
-    }
+    function spawnAsteroid() { asteroids.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, r: 30, xv: (Math.random()-0.5)*3, yv: (Math.random()-0.5)*3 }); }
 
-    function showSettings() {
-        gameRunning = false;
-        document.getElementById('gameOver').style.display = 'none';
-        document.getElementById('settingsScreen').style.display = 'block';
-    }
+    function spawnShield() { if(Math.random() < 0.002) powerups.push({ x: Math.random()*canvas.width, y: -20, xv: (Math.random()-0.5)*2, yv: 2, r: 15 }); }
+
+    function showSettings() { gameRunning = false; document.getElementById('gameOver').style.display = 'none'; document.getElementById('settingsScreen').style.display = 'block'; }
 
     function update() {
         if (!gameRunning) return;
         ctx.fillStyle = '#0d0d0d'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        spawnShield();
 
-        // Movement
         if (keys['ArrowLeft']) ship.a -= 0.08;
         if (keys['ArrowRight']) ship.a += 0.08;
         if (keys['ArrowUp']) {
@@ -153,54 +127,56 @@
         if (ship.x < 0) ship.x = canvas.width; if (ship.x > canvas.width) ship.x = 0;
         if (ship.y < 0) ship.y = canvas.height; if (ship.y > canvas.height) ship.y = 0;
 
-        // Shooting logic
         if (lastShot > 0) lastShot--;
         if ((autoShoot || keys['Space']) && lastShot === 0) {
             bullets.push({ x: ship.x, y: ship.y, xv: 8 * Math.cos(ship.a), yv: 8 * Math.sin(ship.a), d: 0 });
-            lastShot = ship.delay; playSound(800, 0.1);
+            lastShot = ship.delay; playSound(800, 0.1, 'square');
         }
 
-        // Particles
-        for (let i = particles.length - 1; i >= 0; i--) {
-            let p = particles[i]; p.x += p.xv; p.y += p.yv; p.life -= 0.03;
-            if (p.life <= 0) particles.splice(i, 1);
-            else { ctx.fillStyle = `rgba(255, 150, 0, ${p.life})`; ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI*2); ctx.fill(); }
-        }
+        // Powerups (Shield)
+        powerups.forEach((p, pi) => {
+            p.x += p.xv; p.y += p.yv;
+            ctx.fillStyle = 'cyan'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+            if (Math.hypot(p.x - ship.x, p.y - ship.y) < p.r + ship.r) {
+                hasShield = true; powerups.splice(pi, 1); playSound(1200, 0.2);
+            }
+        });
 
-        // Bullets
-        for (let i = bullets.length - 1; i >= 0; i--) {
-            let b = bullets[i]; b.x += b.xv; b.y += b.yv; b.d++;
-            if (b.d > 60) bullets.splice(i, 1);
-            else { ctx.fillStyle = '#00ffcc'; ctx.fillRect(b.x, b.y, 4, 4); }
-        }
+        // Particles & Bullets
+        particles.forEach((p, i) => { p.x += p.xv; p.y += p.yv; p.life -= 0.03; if (p.life <= 0) particles.splice(i, 1); else { ctx.fillStyle = `rgba(255, 150, 0, ${p.life})`; ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI*2); ctx.fill(); } });
+        bullets.forEach((b, i) => { b.x += b.xv; b.y += b.yv; b.d++; if (b.d > 60) bullets.splice(i, 1); else { ctx.fillStyle = '#00ffcc'; ctx.fillRect(b.x, b.y, 4, 4); } });
 
         // Asteroids
         asteroids.forEach((a, ai) => {
             a.x += a.xv; a.y += a.yv;
             if (a.x < 0) a.x = canvas.width; if (a.x > canvas.width) a.x = 0;
-            ctx.strokeStyle = 'white'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2); ctx.stroke();
+            ctx.strokeStyle = 'white'; ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2); ctx.stroke();
             
             bullets.forEach((b, bi) => {
                 if (Math.hypot(a.x - b.x, a.y - b.y) < a.r) {
                     asteroids.splice(ai, 1); bullets.splice(bi, 1);
-                    score += 100; playSound(200, 0.3); spawnAsteroid();
+                    score += 100; playSound(200, 0.3, 'sawtooth'); spawnAsteroid();
                     document.getElementById('score').innerText = score;
                 }
             });
 
             if (Math.hypot(a.x - ship.x, a.y - ship.y) < a.r + ship.r) {
-                lives--; playSound(100, 0.5); asteroids.splice(ai, 1); spawnAsteroid();
-                document.getElementById('health').innerHTML = "❤️".repeat(lives);
-                if (lives <= 0) {
-                    gameRunning = false;
-                    if (score > highScore) { highScore = score; localStorage.setItem('astroHighScore', highScore); }
-                    document.getElementById('gameOver').style.display = 'block';
-                    document.getElementById('finalScore').innerText = score;
+                if (hasShield) { hasShield = false; asteroids.splice(ai, 1); spawnAsteroid(); playSound(400, 0.2); }
+                else {
+                    lives--; playSound(100, 0.5, 'sawtooth'); asteroids.splice(ai, 1); spawnAsteroid();
+                    document.getElementById('health').innerHTML = "❤️".repeat(lives);
+                    if (lives <= 0) {
+                        gameRunning = false;
+                        if (score > highScore) { highScore = score; localStorage.setItem('astroHighScore', highScore); }
+                        document.getElementById('gameOver').style.display = 'block';
+                        document.getElementById('finalScore').innerText = score;
+                    }
                 }
             }
         });
 
-        // Draw Ship with Color
+        // Draw Ship & Shield
+        if (hasShield) { ctx.strokeStyle = 'cyan'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(ship.x, ship.y, ship.r + 8, 0, Math.PI*2); ctx.stroke(); }
         ctx.strokeStyle = shipColor; ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(ship.x + ship.r * Math.cos(ship.a), ship.y + ship.r * Math.sin(ship.a));
